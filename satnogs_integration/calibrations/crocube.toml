@@ -1,0 +1,54 @@
+# crocube units; value = raw * scale + offset
+# source: CroCube Amateur Radio Information, updated 2024-09-01
+# https://crocube.hr/wp-content/uploads/2022/12/CroCube_AmateurRadioInfo_2024-09-15.pdf
+# fields with no documented unit are left out and stay raw:
+# magnetometer and gyroscope axes, photodiodes, obc_freemem, atr uptimes
+
+# battery, millivolts
+obc_bat = { scale = 0.001, unit = "V" }
+psu_battery = { scale = 0.001, unit = "V" }
+
+# temperatures, hundredths of a degree
+obc_temp_mcu = { scale = 0.01, unit = "degC" }
+psu_temp_sys = { scale = 0.01, unit = "degC" }
+psu_temp_bat = { scale = 0.01, unit = "degC" }
+uhf_trx_temp = { scale = 0.01, unit = "degC" }
+uhf_rf_temp = { scale = 0.01, unit = "degC" }
+uhf_pa_temp = { scale = 0.01, unit = "degC" }
+vhf_trx_temp = { scale = 0.01, unit = "degC" }
+vhf_rf_temp = { scale = 0.01, unit = "degC" }
+vhf_pa_temp = { scale = 0.01, unit = "degC" }
+mgs_temp_int_mag = { scale = 0.01, unit = "degC" }
+mgs_temp_int_gyr = { scale = 0.01, unit = "degC" }
+mgs_temp_ext_mag = { scale = 0.01, unit = "degC" }
+mgs_temp_ext_gyr = { scale = 0.01, unit = "degC" }
+sol_temp_zp = { scale = 0.01, unit = "degC" }
+sol_temp_xp = { scale = 0.01, unit = "degC" }
+sol_temp_yp = { scale = 0.01, unit = "degC" }
+sol_temp_zn = { scale = 0.01, unit = "degC" }
+sol_temp_xn = { scale = 0.01, unit = "degC" }
+sol_temp_yn = { scale = 0.01, unit = "degC" }
+
+# signal strength measured by the satellite's own receiver
+uhf_act_rssi_raw = { scale = 0.5, offset = -134, unit = "dBm" }
+uhf_dcd_rssi_raw = { scale = 0.5, offset = -134, unit = "dBm" }
+vhf_act_rssi_raw = { scale = 0.5, offset = -134, unit = "dBm" }
+vhf_dcd_rssi_raw = { scale = 0.5, offset = -134, unit = "dBm" }
+
+# already in the unit shown
+psu_cur_in = { unit = "mA" }
+psu_cur_out = { unit = "mA" }
+psu_gnd_wdt = { unit = "h" }
+obc_uptime = { unit = "s" }
+obc_uptime_tot = { unit = "s" }
+psu_uptime = { unit = "s" }
+psu_uptime_tot = { unit = "s" }
+uhf_uptime = { unit = "s" }
+uhf_uptime_tot = { unit = "s" }
+vhf_uptime = { unit = "s" }
+vhf_uptime_tot = { unit = "s" }
+
+# morse beacon
+temp_mcu = { unit = "degC" }
+temp_pa = { unit = "degC" }
+uptime_total = { unit = "min" }

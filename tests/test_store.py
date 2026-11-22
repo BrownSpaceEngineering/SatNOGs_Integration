@@ -2,6 +2,9 @@ import binascii
 import datetime as dt
 import sqlite3
 
+import pytest
+
+from satnogs_integration.calibration import Calibration
 from satnogs_integration.store import MIGRATIONS, SCHEMA, Store
 from tests.support import NORAD, OBSERVERS, PAGE, PAGE1_ROWS, UTC
 
@@ -127,3 +130,22 @@ def test_an_old_database_is_upgraded_in_place(tmp_path):
             assert store.counts(NORAD)["frames"] == 1
         assert read(path, "PRAGMA user_version") == [(len(MIGRATIONS),)]
     assert read(path, "SELECT receptions FROM transmissions") == [(1,)]
+
+
+def test_telemetry_applies_calibrations(store, tmp_path):
+    store.save_page(NORAD, PAGE1_ROWS, next_url=None, fetched_at=T0)
+    fields = {"obc_bat": 8205, "obc_uptime": 5, "src_callsign": "9A0CC"}
+    store.save_decode(
+        store.undecoded(NORAD)[0].id, decoder="crocube", decoded_at=T0, fields=fields
+    )
+    sql = "SELECT field, raw, value, unit FROM telemetry ORDER BY field"
+    raw_only = [("obc_bat", 8205, 8205.0, None), ("obc_uptime", 5, 5.0, None)]
+    # numbers only, and unchanged without a calibration
+    assert read(tmp_path / "state.db", sql) == raw_only
+    store.set_calibrations("crocube", [Calibration("obc_bat", 0.001, 0.0, "V")])
+    bat, uptime = read(tmp_path / "state.db", sql)
+    assert bat == ("obc_bat", 8205, pytest.approx(8.205), "V")
+    assert uptime == ("obc_uptime", 5, 5.0, None)
+    # a decoder's calibrations are replaced as a set
+    store.set_calibrations("crocube", [])
+    assert read(tmp_path / "state.db", sql) == raw_only

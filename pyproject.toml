@@ -21,6 +21,9 @@ satnogs-integration = "satnogs_integration.__main__:main"
 [tool.setuptools.packages.find]
 include = ["satnogs_integration*"]
 
+[tool.setuptools.package-data]
+satnogs_integration = ["calibrations/*.toml"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"

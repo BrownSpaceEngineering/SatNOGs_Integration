@@ -1,10 +1,13 @@
 import datetime as dt
 import json
+import sqlite3
 from urllib.parse import parse_qs, urlparse
 
 import httpx
 
+from satnogs_integration import __main__ as cli
 from satnogs_integration.__main__ import main, pause_after
+from satnogs_integration.config import ConfigError
 from satnogs_integration.store import Store
 from satnogs_integration.timeutil import parse_iso8601, utcnow
 from tests.support import NORAD, PAGE
@@ -129,3 +132,24 @@ def test_only_the_first_sweep_rescans_the_full_overlap(monkeypatch, tmp_path, fa
     for start in (second, third):
         age = utcnow() - parse_iso8601(start)
         assert dt.timedelta(hours=1, minutes=59) < age < dt.timedelta(hours=3)
+
+
+def test_values_are_stored_with_units(monkeypatch, tmp_path, fake_db):
+    env(monkeypatch, tmp_path)
+    transport = httpx.MockTransport(fake_db.handler)
+    assert main(["--once", "--max-pages", "1"], transport=transport) == 0
+    with sqlite3.connect(tmp_path / "state.db") as db:
+        row = db.execute(
+            "SELECT raw, value, unit FROM telemetry WHERE field = 'obc_bat'"
+        ).fetchone()
+    assert row[0] == 8205 and abs(row[1] - 8.205) < 1e-9 and row[2] == "V"
+
+
+def test_a_bad_calibration_file_exits_2(monkeypatch, tmp_path):
+    env(monkeypatch, tmp_path)
+
+    def broken(decoder):
+        raise ConfigError("crocube.toml: bad")
+
+    monkeypatch.setattr(cli, "load_calibrations", broken)
+    assert main(["--once"]) == 2

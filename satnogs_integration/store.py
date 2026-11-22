@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Self
 
+from .calibration import Calibration
 from .timeutil import parse_iso8601, to_iso_z
 
 log = logging.getLogger(__name__)
@@ -76,8 +77,28 @@ SELECT f.id AS frame_id, f.norad_cat_id, f.timestamp, f.sha256,
 FROM firsts JOIN frames f ON f.id = firsts.id;
 """
 
+# telemetry: one row per transmission and numeric field, in real units where known
+CALIBRATIONS = """
+CREATE TABLE calibrations (
+    decoder TEXT NOT NULL,
+    field   TEXT NOT NULL,
+    scale   REAL NOT NULL DEFAULT 1,
+    offset  REAL NOT NULL DEFAULT 0,
+    unit    TEXT,
+    PRIMARY KEY (decoder, field)
+);
+CREATE VIEW telemetry AS
+SELECT t.frame_id, t.norad_cat_id, t.timestamp, j.key AS field, j.value AS raw,
+       CAST(j.value * COALESCE(c.scale, 1) + COALESCE(c.offset, 0) AS REAL) AS value,
+       c.unit
+FROM transmissions t
+JOIN json_each(t.decoded_json) j
+LEFT JOIN calibrations c ON c.decoder = t.decoder AND c.field = j.key
+WHERE j.type IN ('integer', 'real');
+"""
+
 # one script per schema version, applied in order; PRAGMA user_version holds the count
-MIGRATIONS = (TRANSMISSIONS,)
+MIGRATIONS = (TRANSMISSIONS, CALIBRATIONS)
 
 INSERT_FRAME = (
     "INSERT OR IGNORE INTO frames (norad_cat_id, timestamp, observer, sha256, raw, "
@@ -287,6 +308,19 @@ class Store:
                 frame_id,
             ),
         )
+
+    def set_calibrations(self, decoder: str, rows: Iterable[Calibration]) -> None:
+        # replace one decoder's calibrations
+        params = [(decoder, c.field, c.scale, c.offset, c.unit) for c in rows]
+        with self._db:
+            self._db.execute("BEGIN IMMEDIATE")
+            self._db.execute("DELETE FROM calibrations WHERE decoder = ?", (decoder,))
+            self._db.executemany(
+                "INSERT INTO calibrations (decoder, field, scale, offset, unit) "
+                "VALUES (?, ?, ?, ?, ?)",
+                params,
+            )
+            self._db.execute("COMMIT")
 
     #reporting 
 

@@ -11,6 +11,7 @@ from collections.abc import Callable
 
 import httpx
 
+from .calibration import load_calibrations
 from .config import ConfigError, Settings
 from .decode import DecodeError, KaitaiDecoder, decode_pending
 from .satnogs_db import DbClient, DbError
@@ -100,6 +101,7 @@ def main(
     try:
         settings = Settings.from_env()
         decoder = KaitaiDecoder(settings.decoder)
+        calibrations = load_calibrations(decoder.name)
     except (ConfigError, DecodeError) as exc:
         log.error("configuration error: %s", exc)
         return 2
@@ -109,6 +111,7 @@ def main(
         if args.stats:
             print(json.dumps(store.counts(norad), indent=2))
             return 0
+        store.set_calibrations(decoder.name, calibrations)
         with DbClient(
             settings.db_url,
             settings.db_token,
