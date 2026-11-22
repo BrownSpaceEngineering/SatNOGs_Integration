@@ -101,6 +101,16 @@ def test_a_failed_cycle_doubles_the_pause(monkeypatch, tmp_path, fake_db):
         assert store.counts(NORAD)["frames"] == 2 * PAGE
 
 
+def test_frames_saved_before_a_failure_are_decoded(monkeypatch, tmp_path, fake_db):
+    env(monkeypatch, tmp_path)
+    fake_db.queue("page2", *[httpx.Response(500)] * 7)  # the first try and 6 retries
+    transport = httpx.MockTransport(fake_db.handler)
+    assert main(["--once"], transport=transport, sleep=lambda seconds: None) == 1
+    with Store(tmp_path / "state.db") as store:
+        counts = store.counts(NORAD)
+    assert counts["frames"] == PAGE and counts["pending"] == 0
+
+
 def test_a_long_retry_after_sets_the_pause(monkeypatch, tmp_path, fake_db):
     env(monkeypatch, tmp_path)
     fake_db.queue("page1", httpx.Response(429, headers={"Retry-After": "86400"}))

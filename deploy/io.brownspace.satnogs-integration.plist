@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- launchd agent for satnogs-integration; install steps are in README.md -->
+<!-- UV_BIN, REPO_DIR and HOME_DIR are filled in by the install command -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>io.brownspace.satnogs-integration</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>UV_BIN</string>
+        <string>run</string>
+        <string>--env-file</string>
+        <string>.env</string>
+        <string>--no-sync</string>
+        <string>satnogs-integration</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>REPO_DIR</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <!-- restart after any non-zero exit; launchd cannot exclude codes 2 and 3 -->
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    <!-- at most one start an hour, so a refused key costs one request an hour -->
+    <key>ThrottleInterval</key>
+    <integer>3600</integer>
+    <key>ProcessType</key>
+    <string>Background</string>
+    <key>StandardOutPath</key>
+    <string>HOME_DIR/Library/Logs/satnogs-integration.log</string>
+    <key>StandardErrorPath</key>
+    <string>HOME_DIR/Library/Logs/satnogs-integration.log</string>
+</dict>
+</plist>

@@ -65,15 +65,22 @@ def run_cycle(
     overlap: dt.timedelta | None = None,
     max_pages: int | None = None,
 ) -> SweepResult:
-    result = run_sweep(
-        client,
-        store,
-        norad_cat_id=settings.norad_cat_id,
-        start=settings.ingest_start,
-        overlap=settings.overlap if overlap is None else overlap,
-        max_pages=max_pages,
-    )
+    error = None
+    try:
+        result = run_sweep(
+            client,
+            store,
+            norad_cat_id=settings.norad_cat_id,
+            start=settings.ingest_start,
+            overlap=settings.overlap if overlap is None else overlap,
+            max_pages=max_pages,
+        )
+    except DbError as exc:
+        error = exc
+    # frames saved before a failure are still decoded
     decode_pending(store, decoder, settings.norad_cat_id)
+    if error is not None:
+        raise error
     return result
 
 
