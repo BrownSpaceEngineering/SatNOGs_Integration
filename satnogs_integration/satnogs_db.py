@@ -171,7 +171,13 @@ class DbClient:
                 self.requests_made += 1
             status = response.status_code
             if status == 200:
-                return response.json()
+                try:
+                    return response.json()
+                except ValueError:
+                    # e.g. a maintenance page; the main loop pauses and retries
+                    raise DbError(
+                        f"HTTP 200 with a non-JSON body from {url}", status=200
+                    ) from None
             if status == 429 or status >= 500:
                 retry_after = parse_retry_after(response.headers.get("Retry-After"))
                 if retry_after is not None and retry_after > BACKOFF_MAX_SECONDS:

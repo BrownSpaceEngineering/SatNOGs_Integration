@@ -88,6 +88,12 @@ def test_other_4xx_is_fatal_without_retry(client, fake_db, clock):
     assert info.value.status == 400 and clock.sleeps == []
 
 
+def test_non_json_body_is_an_error(client, fake_db):
+    fake_db.queue("page1", httpx.Response(200, text="<html>maintenance</html>"))
+    with pytest.raises(DbError, match="non-JSON"):
+        client.fetch_page(client.telemetry_url(NORAD))
+
+
 def test_unexpected_body_shape_is_an_error(client, fake_db):
     fake_db.queue("page1", httpx.Response(200, json=[1, 2, 3]))
     with pytest.raises(DbError, match="unexpected response shape"):
