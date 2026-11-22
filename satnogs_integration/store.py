@@ -45,6 +45,40 @@ CREATE TABLE IF NOT EXISTS cursor (
 );
 """
 
+# identical bytes received within this gap are one transmission
+SAME_TRANSMISSION_SECONDS = 45
+
+# one row per transmission: its earliest reception, and how often it was heard
+TRANSMISSIONS = f"""
+CREATE VIEW transmissions AS
+WITH marked AS (
+    SELECT id, norad_cat_id, sha256, timestamp, observer,
+           CASE WHEN (julianday(timestamp) - julianday(LAG(timestamp) OVER w))
+                     * 86400 <= {SAME_TRANSMISSION_SECONDS}
+                THEN 0 ELSE 1 END AS is_first
+    FROM frames
+    WINDOW w AS (PARTITION BY norad_cat_id, sha256 ORDER BY timestamp, id)
+),
+grouped AS (
+    SELECT *, SUM(is_first) OVER (
+        PARTITION BY norad_cat_id, sha256 ORDER BY timestamp, id
+    ) AS burst
+    FROM marked
+),
+firsts AS (
+    SELECT MAX(CASE WHEN is_first = 1 THEN id END) AS id,
+           COUNT(*) AS receptions, COUNT(DISTINCT observer) AS stations
+    FROM grouped
+    GROUP BY norad_cat_id, sha256, burst
+)
+SELECT f.id AS frame_id, f.norad_cat_id, f.timestamp, f.sha256,
+       firsts.receptions, firsts.stations, f.decoder, f.decoded_json, f.decode_error
+FROM firsts JOIN frames f ON f.id = firsts.id;
+"""
+
+# one script per schema version, applied in order; PRAGMA user_version holds the count
+MIGRATIONS = (TRANSMISSIONS,)
+
 INSERT_FRAME = (
     "INSERT OR IGNORE INTO frames (norad_cat_id, timestamp, observer, sha256, raw, "
     "station_id, observation_id, app_source, transmitter, fetched_at) "
@@ -82,6 +116,25 @@ class Store:
         self._db.execute("PRAGMA journal_mode=WAL")
         self._db.execute("PRAGMA synchronous=NORMAL")
         self._db.executescript(SCHEMA)
+        self._migrate()
+
+    def _version(self) -> int:
+        return self._db.execute("PRAGMA user_version").fetchone()[0]
+
+    def _migrate(self) -> None:
+        for number, script in enumerate(MIGRATIONS, start=1):
+            if self._version() >= number:
+                continue
+            try:
+                self._db.executescript(
+                    f"BEGIN IMMEDIATE; {script} PRAGMA user_version = {number}; COMMIT;"
+                )
+            except sqlite3.OperationalError:
+                if self._db.in_transaction:
+                    self._db.execute("ROLLBACK")
+                # another process may have applied it first
+                if self._version() < number:
+                    raise
 
     def close(self) -> None:
         self._db.close()

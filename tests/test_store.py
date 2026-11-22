@@ -1,8 +1,9 @@
 import binascii
 import datetime as dt
+import sqlite3
 
-from satnogs_integration.store import Store
-from tests.support import NORAD, PAGE, PAGE1_ROWS, UTC
+from satnogs_integration.store import MIGRATIONS, SCHEMA, Store
+from tests.support import NORAD, OBSERVERS, PAGE, PAGE1_ROWS, UTC
 
 T0 = dt.datetime(2026, 10, 18, 12, 0, tzinfo=UTC)
 
@@ -75,3 +76,54 @@ def test_decode_bookkeeping(store):
     counts = store.counts(NORAD)
     assert counts["decoded"] == 1 and counts["errors"] == 1 and counts["pending"] == 1
     assert store.undecoded(NORAD, limit=1)[0].id == pending[2].id
+
+
+def read(path, sql):
+    # a second plain connection, the way a dashboard reads the file
+    with sqlite3.connect(path) as db:
+        return db.execute(sql).fetchall()
+
+
+def test_receptions_close_in_time_are_one_transmission(store, tmp_path):
+    first = PAGE1_ROWS[0]  # received at 18:00:00 by station one
+    rows = [
+        first,
+        dict(first, observer=OBSERVERS[1], timestamp="2026-10-18T18:00:10Z"),
+        dict(first, timestamp="2026-10-18T18:10:00Z"),  # sent again later
+    ]
+    store.save_page(NORAD, rows, next_url=None, fetched_at=T0)
+    assert read(
+        tmp_path / "state.db",
+        "SELECT timestamp, receptions, stations FROM transmissions ORDER BY timestamp",
+    ) == [("2026-10-18T18:00:00Z", 2, 2), ("2026-10-18T18:10:00Z", 1, 1)]
+
+
+def test_different_frames_are_different_transmissions(store, tmp_path):
+    store.save_page(NORAD, PAGE1_ROWS, next_url=None, fetched_at=T0)
+    path = tmp_path / "state.db"
+    assert read(path, "SELECT COUNT(*), SUM(receptions) FROM transmissions") == [
+        (PAGE, PAGE)
+    ]
+    # the row kept is a stored frame
+    assert read(
+        path,
+        "SELECT COUNT(*) FROM transmissions t JOIN frames f ON f.id = t.frame_id "
+        "WHERE f.timestamp = t.timestamp AND f.sha256 = t.sha256",
+    ) == [(PAGE,)]
+
+
+def test_an_old_database_is_upgraded_in_place(tmp_path):
+    path = tmp_path / "state.db"
+    with sqlite3.connect(path) as db:  # as written before schema versions existed
+        db.executescript(SCHEMA)
+        db.execute(
+            "INSERT INTO frames (norad_cat_id, timestamp, observer, sha256, raw, "
+            "fetched_at) VALUES (?, '2026-10-18T18:00:00Z', 'a', 'x', x'00', 't')",
+            (NORAD,),
+        )
+    assert read(path, "PRAGMA user_version") == [(0,)]
+    for _ in range(2):  # the second open changes nothing
+        with Store(path) as store:
+            assert store.counts(NORAD)["frames"] == 1
+        assert read(path, "PRAGMA user_version") == [(len(MIGRATIONS),)]
+    assert read(path, "SELECT receptions FROM transmissions") == [(1,)]
