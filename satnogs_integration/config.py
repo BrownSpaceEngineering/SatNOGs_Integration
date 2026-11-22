@@ -22,7 +22,10 @@ class Settings:
     state_db: Path
     ingest_start: dt.datetime
     overlap: dt.timedelta
+    poll_overlap: dt.timedelta
+    deep_interval: dt.timedelta
     poll_seconds: float
+    min_interval: float
 
     @classmethod
     def from_env(
@@ -78,5 +81,9 @@ class Settings:
             state_db=Path(get("STATE_DB", "data/state.db")),
             ingest_start=start,
             overlap=dt.timedelta(hours=number("OVERLAP_HOURS", "48", 0)),
-            poll_seconds=number("POLL_SECONDS", "600", 1),
+            poll_overlap=dt.timedelta(hours=number("POLL_OVERLAP_HOURS", "2", 0)),
+            deep_interval=dt.timedelta(hours=number("DEEP_SWEEP_HOURS", "24", 0)),
+            poll_seconds=number("POLL_SECONDS", "1800", 1),
+            # satnogs db allows 6 requests/minute
+            min_interval=number("MIN_INTERVAL_SECONDS", "10.5", 10),
         )

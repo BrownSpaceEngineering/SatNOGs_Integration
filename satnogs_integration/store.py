@@ -119,7 +119,7 @@ class Store:
         started_at: dt.datetime,
         first_url: str,
     ) -> None:
-        """Start a new sweep; the watermark is kept until the sweep completes."""
+        #start new sweep
         self._db.execute(
             "INSERT INTO cursor (norad_cat_id, since, sweep_started_at, next_url) "
             "VALUES (?, ?, ?, ?) ON CONFLICT (norad_cat_id) DO UPDATE SET "
@@ -136,12 +136,9 @@ class Store:
         next_url: str | None,
         fetched_at: dt.datetime,
     ) -> int:
-        """Store a page's rows and its next cursor in one transaction.
 
-        When next_url is None the sweep is complete: the watermark advances to the
-        sweep's own start time (never backwards) and the cursor is cleared.
-        Returns the number of rows that were new.
-        """
+        #store a page's rows 
+    
         params = list(self._frame_params(norad_cat_id, rows, fetched_at))
         with self._db:
             self._db.execute("BEGIN IMMEDIATE")

@@ -73,7 +73,7 @@ def run_sweep(
                 break
     except DbError as exc:
         if resumed and result.pages == 0 and exc.status in (400, 404):
-            # The saved cursor is no longer accepted: drop it so the next run starts fresh.
+            # drop saved cursor when no longer accepted
             log.warning("saved cursor rejected (%s); discarding it", exc)
             store.open_sweep(
                 norad_cat_id,

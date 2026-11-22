@@ -20,15 +20,25 @@ log = logging.getLogger(__name__)
 REQUESTS_PER_MINUTE = 6
 BACKOFF_BASE_SECONDS = 2.0
 BACKOFF_MAX_SECONDS = 300.0
-USER_AGENT = f"satnogs-integration/{__version__}"
+# lets satnogs admins identify this client
+CONTACT_URL = "https://github.com/BrownSpaceEngineering/SatNOGs_Integration"
+USER_AGENT = f"satnogs-integration/{__version__} (+{CONTACT_URL})"
 
 
 class DbError(RuntimeError):
     #failed request
 
-    def __init__(self, message: str, *, status: int | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        status: int | None = None,
+        retry_after: float | None = None,
+    ) -> None:
         super().__init__(message)
         self.status = status
+        # set when Retry-After exceeds BACKOFF_MAX_SECONDS
+        self.retry_after = retry_after
 
 
 @dataclass
@@ -163,17 +173,21 @@ class DbClient:
             if status == 200:
                 return response.json()
             if status == 429 or status >= 500:
+                retry_after = parse_retry_after(response.headers.get("Retry-After"))
+                if retry_after is not None and retry_after > BACKOFF_MAX_SECONDS:
+                    # too long to wait here; the caller pauses instead
+                    raise DbError(
+                        f"HTTP {status}: server asked to wait {retry_after:.0f} s: {url}",
+                        status=status,
+                        retry_after=retry_after,
+                    )
                 attempt += 1
                 if attempt > self.max_retries:
                     raise DbError(
                         f"HTTP {status} after {self.max_retries} retries: {url}",
                         status=status,
                     )
-                self._backoff(
-                    attempt,
-                    parse_retry_after(response.headers.get("Retry-After")),
-                    f"HTTP {status}",
-                )
+                self._backoff(attempt, retry_after, f"HTTP {status}")
                 continue
             if status == 401:
                 raise DbError(

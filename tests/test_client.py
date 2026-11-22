@@ -25,6 +25,7 @@ def test_every_request_carries_token_and_user_agent(client, fake_db):
     request = fake_db.calls[0]
     assert request.headers["Authorization"] == "Token test-token"
     assert request.headers["User-Agent"].startswith("satnogs-integration/")
+    assert "(+https://" in request.headers["User-Agent"]
 
 
 def test_requests_are_paced(fake_db, clock):
@@ -40,6 +41,14 @@ def test_429_waits_retry_after(client, fake_db, clock):
     )
     assert len(client.fetch_page(client.telemetry_url(NORAD)).rows) == PAGE
     assert clock.sleeps == [7.0]
+
+
+def test_long_retry_after_is_raised_not_retried(client, fake_db, clock):
+    fake_db.queue("page1", httpx.Response(429, headers={"Retry-After": "86400"}))
+    with pytest.raises(DbError) as info:
+        client.fetch_page(client.telemetry_url(NORAD))
+    assert info.value.status == 429 and info.value.retry_after == 86400
+    assert clock.sleeps == [] and len(fake_db.calls) == 1
 
 
 def test_5xx_and_transport_errors_back_off_exponentially(client, fake_db, clock):

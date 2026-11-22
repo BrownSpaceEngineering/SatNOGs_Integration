@@ -16,7 +16,10 @@ def test_defaults():
     assert s.state_db == Path("data/state.db")
     assert s.ingest_start == NOW - dt.timedelta(days=7)
     assert s.overlap == dt.timedelta(hours=48)
-    assert s.poll_seconds == 600
+    assert s.poll_overlap == dt.timedelta(hours=2)
+    assert s.deep_interval == dt.timedelta(hours=24)
+    assert s.poll_seconds == 1800
+    assert s.min_interval == 10.5
 
 
 def test_explicit_values():
@@ -25,12 +28,18 @@ def test_explicit_values():
             **GOOD,
             "INGEST_START": "2026-10-01T00:00:00Z",
             "OVERLAP_HOURS": "6",
+            "POLL_OVERLAP_HOURS": "1",
+            "DEEP_SWEEP_HOURS": "12",
             "POLL_SECONDS": "60",
+            "MIN_INTERVAL_SECONDS": "11",
             "SATNOGS_DB_URL": "https://db.test/",
         }
     )
     assert s.ingest_start == dt.datetime(2026, 10, 1, tzinfo=dt.UTC)
     assert s.overlap == dt.timedelta(hours=6)
+    assert s.poll_overlap == dt.timedelta(hours=1)
+    assert s.deep_interval == dt.timedelta(hours=12)
+    assert s.poll_seconds == 60 and s.min_interval == 11
     assert s.db_url == "https://db.test"
 
 
@@ -46,6 +55,8 @@ def test_explicit_values():
         ({"OVERLAP_HOURS": "inf"}, "OVERLAP_HOURS"),
         ({"OVERLAP_HOURS": "nan"}, "OVERLAP_HOURS"),
         ({"POLL_SECONDS": "0"}, "POLL_SECONDS"),
+        ({"POLL_OVERLAP_HOURS": "-1"}, "POLL_OVERLAP_HOURS"),
+        ({"MIN_INTERVAL_SECONDS": "5"}, "MIN_INTERVAL_SECONDS"),  # faster than 6/minute
     ],
 )
 def test_rejects_bad_values(overrides, message):
